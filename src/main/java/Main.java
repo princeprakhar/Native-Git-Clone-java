@@ -27,14 +27,15 @@ public class Main {
            throw new RuntimeException(e);
          }
        }
-       case "cat-file"->{
+       case "cat-file" ->{
          String hashOfDirAndFilename = args[2];
          String hashOfDir = hashOfDirAndFilename.substring(0,2);
          String hashOfFilename = hashOfDirAndFilename.substring(2);
          final File fileDestination = new File(".git/objects/"+hashOfDir+"/"+hashOfFilename);
          try{
            String blobData = new BufferedReader(new InputStreamReader(new InflaterInputStream(new FileInputStream(fileDestination)))).readLine();
-           String fileContent = blobData.substring(blobData.indexOf('\0'+1));
+           String fileContent = blobData.substring(blobData.indexOf("\0")+1);
+
            System.out.println(fileContent);
          }catch (IOException e)
          {
