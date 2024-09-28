@@ -1,6 +1,8 @@
-import java.io.File;
-import java.io.IOException;
+import java.io.*;
 import java.nio.file.Files;
+import java.sql.SQLOutput;
+import java.util.zip.InflaterInputStream;
+
 
 public class Main {
   public static void main(String[] args){
@@ -24,6 +26,20 @@ public class Main {
            System.out.println("Initialized git directory");
          } catch (IOException e) {
            throw new RuntimeException(e);
+         }
+       }
+       case "cat-file"->{
+         String hashOfDirAndFilename = args[2];
+         String hashOfDir = hashOfDirAndFilename.substring(0,2);
+         String hashOfFilename = hashOfDirAndFilename.substring(2);
+         final File fileDestination = new File(".git/objects/"+hashOfDir+"/"+hashOfFilename);
+         try{
+           String blobData = new BufferedReader(new InputStreamReader(new InflaterInputStream(new FileInputStream(fileDestination)))).readLine();
+           String fileContent = blobData.substring(blobData.indexOf('\0'+1));
+           System.out.println(fileContent);
+         }catch (IOException e)
+         {
+           System.out.println(e.getMessage());
          }
        }
        default -> System.out.println("Unknown command: " + command);
