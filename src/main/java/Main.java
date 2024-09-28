@@ -1,6 +1,5 @@
 import java.io.*;
 import java.nio.file.Files;
-import java.sql.SQLOutput;
 import java.util.zip.InflaterInputStream;
 
 
@@ -39,7 +38,7 @@ public class Main {
            System.out.println(fileContent);
          }catch (IOException e)
          {
-           System.out.println(e.getMessage());
+           throw new RuntimeException(e);
          }
        }
        default -> System.out.println("Unknown command: " + command);
