@@ -36,7 +36,7 @@ public class Main {
            String blobData = new BufferedReader(new InputStreamReader(new InflaterInputStream(new FileInputStream(fileDestination)))).readLine();
            String fileContent = blobData.substring(blobData.indexOf("\0")+1);
 
-           System.out.println(fileContent);
+           System.out.print(fileContent);
          }catch (IOException e)
          {
            throw new RuntimeException(e);
