@@ -193,7 +193,6 @@ public class Main {
         return sb.toString();
     }
 
-    // write-tree command handler
     public static void writeTreeHandler() throws IOException {
         String treeHash = writeTree(Paths.get("."));
         System.out.println(treeHash);
@@ -201,37 +200,32 @@ public class Main {
 
     // Recursive method to write tree objects
     private static String writeTree(Path dir) throws IOException {
-        List<String> entries = new ArrayList<>();
+        ByteArrayOutputStream treeContent = new ByteArrayOutputStream();
         Files.list(dir).sorted().forEach(path -> {
             try {
                 String relativePath = dir.relativize(path).toString();
                 if (Files.isDirectory(path)) {
                     if (!relativePath.equals(".git")) {
                         String subTreeHash = writeTree(path);
-                        entries.add(String.format("40000 %s\0%s", relativePath, hexToBytes(subTreeHash)));
+                        writeTreeEntry(treeContent, "40000", relativePath, subTreeHash);
                     }
                 } else {
                     String blobHash = createBlobObject(path.toString(), true);
                     String mode = Files.isExecutable(path) ? "100755" : "100644";
-                    entries.add(String.format("%s %s\0%s", mode, relativePath, hexToBytes(blobHash)));
+                    writeTreeEntry(treeContent, mode, relativePath, blobHash);
                 }
             } catch (IOException e) {
                 throw new UncheckedIOException(e);
             }
         });
 
-        ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        for (String entry : entries) {
-            baos.write(entry.getBytes(StandardCharsets.UTF_8));
-        }
-
-        byte[] treeContent = baos.toByteArray();
-        String header = "tree " + treeContent.length + "\0";
+        byte[] content = treeContent.toByteArray();
+        String header = "tree " + content.length + "\0";
         byte[] headerBytes = header.getBytes(StandardCharsets.UTF_8);
 
-        byte[] fullContent = new byte[headerBytes.length + treeContent.length];
+        byte[] fullContent = new byte[headerBytes.length + content.length];
         System.arraycopy(headerBytes, 0, fullContent, 0, headerBytes.length);
-        System.arraycopy(treeContent, 0, fullContent, headerBytes.length, treeContent.length);
+        System.arraycopy(content, 0, fullContent, headerBytes.length, content.length);
 
         String treeHash = sha1Hex(fullContent);
         String treePath = shaToPath(treeHash);
@@ -244,6 +238,12 @@ public class Main {
         return treeHash;
     }
 
+    // Helper method to write a tree entry
+    private static void writeTreeEntry(ByteArrayOutputStream out, String mode, String name, String hash) throws IOException {
+        out.write(String.format("%s %s\0", mode, name).getBytes(StandardCharsets.UTF_8));
+        out.write(hexToBytes(hash));
+    }
+
     // Helper method to convert hexadecimal string to bytes
     private static byte[] hexToBytes(String hex) {
         byte[] bytes = new byte[hex.length() / 2];
@@ -252,6 +252,7 @@ public class Main {
         }
         return bytes;
     }
+
 
     public static void main(String[] args) {
         if (args.length == 0) {
