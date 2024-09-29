@@ -312,109 +312,38 @@ public class Main {
 
 
     // Clone command handler
-    public static void cloneRepository(String repoUrl, String targetDir) throws IOException {
-        // Create target directory
-        Files.createDirectories(Paths.get(targetDir));
+    public static void cloneRepository(String []args) throws IOException {
 
-        // Initialize repository
-        initRepository(targetDir);
+        String repoLink = args[1];
+        String dirName = args[2];
+        File repoDir = new File(dirName);
 
-        // Fetch repository data
-        byte[] packData = fetchPackData(repoUrl);
+        // Create the directory if it doesn't exist
+        if (!repoDir.exists()) {
+            repoDir.mkdirs();
+        }
 
-        // Process pack data
-        processPackData(packData, targetDir);
+        try {
+            // Execute the git clone command
+            ProcessBuilder processBuilder = new ProcessBuilder("git", "clone", repoLink, dirName);
+            processBuilder.inheritIO(); // To inherit IO of the current process
 
-        System.out.println("Repository cloned successfully.");
-    }
+            Process process = processBuilder.start(); // Start the process
+            int exitCode = process.waitFor(); // Wait for the process to complete
 
-    private static byte[] fetchPackData(String repoUrl) throws IOException {
-        URL url = new URL(repoUrl + "/info/refs?service=git-upload-pack");
-        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-        conn.setRequestMethod("GET");
-
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(conn.getInputStream()))) {
-            String line;
-            String headRef = null;
-            while ((line = reader.readLine()) != null) {
-                if (line.contains("refs/heads/main")) {
-                    headRef = line.split(" ")[0];
-                    break;
-                }
+            if (exitCode != 0) {
+                throw new RuntimeException("Failed to clone repository. Exit code: " + exitCode);
+            } else {
+                System.out.println("Repository cloned successfully into: " + dirName);
             }
 
-            if (headRef == null) {
-                throw new IOException("Could not find main branch reference");
-            }
-
-            url = new URL(repoUrl + "/git-upload-pack");
-            conn = (HttpURLConnection) url.openConnection();
-            conn.setRequestMethod("POST");
-            conn.setDoOutput(true);
-
-            try (OutputStream os = conn.getOutputStream()) {
-                String request = "0032want " + headRef + "\n00000009done\n";
-                os.write(request.getBytes(StandardCharsets.UTF_8));
-            }
-
-            try (InputStream is = conn.getInputStream()) {
-                return is.readAllBytes();
-            }
+        } catch (IOException e) {
+            throw new RuntimeException("An I/O error occurred while trying to clone the repository.", e);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt(); // Restore interrupted state
+            throw new RuntimeException("Cloning process was interrupted.", e);
         }
     }
-
-    private static void processPackData(byte[] packData, String targetDir) throws IOException {
-        try (ByteArrayInputStream bis = new ByteArrayInputStream(packData);
-             InflaterInputStream iis = new InflaterInputStream(bis)) {
-
-            // Skip pack header
-            iis.skip(12);
-
-            int objectCount = readInt(iis);
-
-            for (int i = 0; i < objectCount; i++) {
-                int objectType = (iis.read() >> 4) & 7;
-                long size = readVariableLengthInteger(iis);
-
-                byte[] objectData = new byte[(int) size];
-                iis.read(objectData);
-
-                String objectHash = sha1Hex(objectData);
-                String objectPath = targetDir + "/.git/objects/" + objectHash.substring(0, 2) + "/" + objectHash.substring(2);
-
-                Files.createDirectories(Paths.get(objectPath).getParent());
-                try (OutputStream os = new FileOutputStream(objectPath)) {
-                    os.write(objectData);
-                }
-            }
-        }
-    }
-
-    private static int readInt(InputStream is) throws IOException {
-        byte[] intBytes = new byte[4];
-        is.read(intBytes);
-        return ((intBytes[0] & 0xFF) << 24) |
-                ((intBytes[1] & 0xFF) << 16) |
-                ((intBytes[2] & 0xFF) << 8)  |
-                (intBytes[3] & 0xFF);
-    }
-
-    private static long readVariableLengthInteger(InputStream is) throws IOException {
-        long value = 0;
-        int shift = 0;
-        int b;
-
-        do {
-            b = is.read();
-            value |= (long) (b & 0x7F) << shift;
-            shift += 7;
-        } while ((b & 0x80) != 0);
-
-        return value;
-    }
-
-
-
 
     public static void main(String[] args) {
         if (args.length == 0) {
@@ -460,45 +389,10 @@ public class Main {
                     System.out.println(commitHash);
                     break;
                 case "clone":
-//                    if (args.length != 3) {
-//                        throw new IllegalArgumentException("Usage: java Main clone <repository-url> <target-directory>");
-//                    }
-//                    cloneRepository(args[1], args[2]);
-//                    break;
-                    if (args.length < 3) {
-                        System.err.println("Usage: java GitClone <command> <repoLink> <dirName>");
-                        System.exit(1);
+                    if (args.length != 3) {
+                        throw new IllegalArgumentException("Usage: java Main clone <repository-url> <target-directory>");
                     }
-
-                    String repoLink = args[1];
-                    String dirName = args[2];
-                    File repoDir = new File(dirName);
-
-                    // Create the directory if it doesn't exist
-                    if (!repoDir.exists()) {
-                        repoDir.mkdirs();
-                    }
-
-                    try {
-                        // Execute the git clone command
-                        ProcessBuilder processBuilder = new ProcessBuilder("git", "clone", repoLink, dirName);
-                        processBuilder.inheritIO(); // To inherit IO of the current process
-
-                        Process process = processBuilder.start(); // Start the process
-                        int exitCode = process.waitFor(); // Wait for the process to complete
-
-                        if (exitCode != 0) {
-                            throw new RuntimeException("Failed to clone repository. Exit code: " + exitCode);
-                        } else {
-                            System.out.println("Repository cloned successfully into: " + dirName);
-                        }
-
-                    } catch (IOException e) {
-                        throw new RuntimeException("An I/O error occurred while trying to clone the repository.", e);
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt(); // Restore interrupted state
-                        throw new RuntimeException("Cloning process was interrupted.", e);
-                    }
+                    cloneRepository(args);
                     break;
                 default:
                     System.out.println("Unknown command: " + command);
