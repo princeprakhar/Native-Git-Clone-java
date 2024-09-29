@@ -8,7 +8,7 @@ import java.util.*;
 import java.util.stream.Collectors;
 import java.util.zip.*;
 
-public class GitImplementation {
+public class Main {
     private static final String GIT_DIR = ".git";
     private static final String OBJECTS_DIR = GIT_DIR + "/objects";
     private static final String REFS_DIR = GIT_DIR + "/refs";
