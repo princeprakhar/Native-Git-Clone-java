@@ -50,7 +50,7 @@ public class Main {
 
     private static void catFile(String[] args) throws IOException {
         if (args.length < 3 || !args[1].equals("-p")) {
-            throw new IllegalArgumentException("Usage: java GitImplementation cat-file -p <object>");
+            throw new IllegalArgumentException("Usage: java Main cat-file -p <object>");
         }
         String hash = args[2];
         String content = readObject(hash);
@@ -59,7 +59,7 @@ public class Main {
 
     private static void hashObject(String[] args) throws IOException {
         if (args.length < 2) {
-            throw new IllegalArgumentException("Usage: java GitImplementation hash-object [-w] <file>");
+            throw new IllegalArgumentException("Usage: java Main hash-object [-w] <file>");
         }
         boolean write = args[1].equals("-w");
         String fileName = write ? args[2] : args[1];
@@ -69,7 +69,7 @@ public class Main {
 
     private static void lsTree(String[] args) throws IOException {
         if (args.length < 3) {
-            throw new IllegalArgumentException("Usage: java GitImplementation ls-tree --name-only <tree-ish>");
+            throw new IllegalArgumentException("Usage: java Main ls-tree --name-only <tree-ish>");
         }
         boolean nameOnly = args[1].equals("--name-only");
         String treeIsh = args[2];
@@ -84,7 +84,7 @@ public class Main {
 
     private static void commitTree(String[] args) throws IOException {
         if (args.length < 6) {
-            throw new IllegalArgumentException("Usage: java GitImplementation commit-tree <tree> -p <parent> -m <message>");
+            throw new IllegalArgumentException("Usage: java Main commit-tree <tree> -p <parent> -m <message>");
         }
         String treeHash = args[1];
         String parentHash = args[3];
@@ -95,7 +95,7 @@ public class Main {
 
     private static void cloneRepository(String[] args) throws IOException {
         if (args.length != 3) {
-            throw new IllegalArgumentException("Usage: java GitImplementation clone <repository-url> <target-directory>");
+            throw new IllegalArgumentException("Usage: java Main clone <repository-url> <target-directory>");
         }
         String repoLink = args[1];
         String dirName = args[2];
@@ -248,7 +248,7 @@ public class Main {
 
     private static String createCommitObject(String treeHash, String parentHash, String message) throws IOException {
         String timestamp = Instant.now().toString();
-        String author = "John Doe <john@example.com>";
+        String author = "Prakhar Deep <prakhardeepoo9@gmail.com>";
         String committer = author;
 
         StringBuilder commitContent = new StringBuilder()
