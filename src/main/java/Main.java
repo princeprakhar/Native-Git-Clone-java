@@ -1,4 +1,5 @@
 import java.io.*;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.zip.InflaterInputStream;
 import java.util.zip.DeflaterOutputStream;
@@ -10,14 +11,21 @@ public class Main {
     //sha1hex
     public static String sha1Hex(String input) {
         try {
+            // Create MessageDigest instance for SHA-1
             MessageDigest md = MessageDigest.getInstance("SHA-1");
-            byte[] messageDigest = md.digest(input.getBytes());
+
+            // Add input string's bytes to digest using UTF-8 encoding
+            byte[] messageDigest = md.digest(input.getBytes(StandardCharsets.UTF_8));
+
+            // Convert byte array into a hex representation
             StringBuilder hexString = new StringBuilder();
             for (byte b : messageDigest) {
                 String hex = Integer.toHexString(0xff & b);
                 if (hex.length() == 1) hexString.append('0');
                 hexString.append(hex);
             }
+
+            // Return the full hash as a hexadecimal string
             return hexString.toString();
         } catch (NoSuchAlgorithmException e) {
             throw new RuntimeException(e);
