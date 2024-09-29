@@ -5,10 +5,9 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.util.*;
-import java.util.stream.Collectors;
 import java.util.zip.*;
 
-public class Main {
+public class GitImplementation {
     private static final String GIT_DIR = ".git";
     private static final String OBJECTS_DIR = GIT_DIR + "/objects";
     private static final String REFS_DIR = GIT_DIR + "/refs";
@@ -40,8 +39,6 @@ public class Main {
             default -> System.out.println("Unknown command: " + command);
         }
     }
-
-    // Git command implementations
 
     private static void initRepository() throws IOException {
         Files.createDirectories(Paths.get(OBJECTS_DIR));
@@ -79,7 +76,6 @@ public class Main {
         printTreeEntries(entries, nameOnly);
     }
 
-
     private static void writeTree() throws IOException {
         String treeHash = writeTreeRecursive(Paths.get("."));
         System.out.print(treeHash);
@@ -104,8 +100,6 @@ public class Main {
         String dirName = args[2];
         executeGitClone(repoLink, dirName);
     }
-
-    // Helper methods
 
     private static String sha1Hex(byte[] input) {
         try {
@@ -164,16 +158,49 @@ public class Main {
     }
 
     private static List<String> readTreeObject(String hash) throws IOException {
-        String content = readObject(hash);
-        return Arrays.stream(content.split("\n"))
-                .filter(line -> !line.startsWith("tree "))
-                .collect(Collectors.toList());
+        List<String> entries = new ArrayList<>();
+        Path objectPath = Paths.get(shaToPath(hash));
+
+        try (InputStream fileIn = Files.newInputStream(objectPath);
+             InflaterInputStream inflater = new InflaterInputStream(fileIn);
+             DataInputStream dataIn = new DataInputStream(inflater)) {
+
+            // Skip the header
+            while (dataIn.readByte() != 0) {}
+
+            while (dataIn.available() > 0) {
+                StringBuilder entry = new StringBuilder();
+
+                // Read mode
+                String mode = "";
+                byte b;
+                while ((b = dataIn.readByte()) != ' ') {
+                    mode += (char) b;
+                }
+                entry.append(mode).append(' ');
+
+                // Read name
+                String name = "";
+                while ((b = dataIn.readByte()) != 0) {
+                    name += (char) b;
+                }
+                entry.append(name);
+
+                // Read SHA-1 (20 bytes)
+                byte[] sha = new byte[20];
+                dataIn.readFully(sha);
+
+                entries.add(entry.toString());
+            }
+        }
+
+        return entries;
     }
 
     private static void printTreeEntries(List<String> entries, boolean nameOnly) {
         if (nameOnly) {
             entries.stream()
-                    .map(entry -> entry.split("\\s+")[2]) // Extract the filename
+                    .map(entry -> entry.substring(entry.indexOf(' ') + 1))
                     .sorted()
                     .forEach(System.out::println);
         } else {
@@ -256,8 +283,6 @@ public class Main {
             throw new RuntimeException("Cloning process was interrupted.", e);
         }
     }
-
-    // Utility methods
 
     private static String shaToPath(String sha) {
         return String.format("%s/%s/%s", OBJECTS_DIR, sha.substring(0, 2), sha.substring(2));
