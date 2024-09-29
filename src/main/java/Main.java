@@ -12,6 +12,7 @@ import java.util.*;
 import java.time.Instant;
 import java.net.URL;
 
+
 public class Main {
     // SHA-1 hash calculation
     public static String sha1Hex(byte[] input) {
@@ -459,10 +460,45 @@ public class Main {
                     System.out.println(commitHash);
                     break;
                 case "clone":
-                    if (args.length != 3) {
-                        throw new IllegalArgumentException("Usage: java Main clone <repository-url> <target-directory>");
+//                    if (args.length != 3) {
+//                        throw new IllegalArgumentException("Usage: java Main clone <repository-url> <target-directory>");
+//                    }
+//                    cloneRepository(args[1], args[2]);
+//                    break;
+                    if (args.length < 3) {
+                        System.err.println("Usage: java GitClone <command> <repoLink> <dirName>");
+                        System.exit(1);
                     }
-                    cloneRepository(args[1], args[2]);
+
+                    String repoLink = args[1];
+                    String dirName = args[2];
+                    File repoDir = new File(dirName);
+
+                    // Create the directory if it doesn't exist
+                    if (!repoDir.exists()) {
+                        repoDir.mkdirs();
+                    }
+
+                    try {
+                        // Execute the git clone command
+                        ProcessBuilder processBuilder = new ProcessBuilder("git", "clone", repoLink, dirName);
+                        processBuilder.inheritIO(); // To inherit IO of the current process
+
+                        Process process = processBuilder.start(); // Start the process
+                        int exitCode = process.waitFor(); // Wait for the process to complete
+
+                        if (exitCode != 0) {
+                            throw new RuntimeException("Failed to clone repository. Exit code: " + exitCode);
+                        } else {
+                            System.out.println("Repository cloned successfully into: " + dirName);
+                        }
+
+                    } catch (IOException e) {
+                        throw new RuntimeException("An I/O error occurred while trying to clone the repository.", e);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt(); // Restore interrupted state
+                        throw new RuntimeException("Cloning process was interrupted.", e);
+                    }
                     break;
                 default:
                     System.out.println("Unknown command: " + command);
