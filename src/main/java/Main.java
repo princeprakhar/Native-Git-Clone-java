@@ -134,10 +134,17 @@ public class Main {
 
         List<String> entries = readTreeObject(treeIsh);
 
-        for (String entry : entries) {
-            if (nameOnly) {
-                System.out.println(entry.split("\t")[1]);
-            } else {
+        if (nameOnly) {
+            List<String> names = new ArrayList<>();
+            for (String entry : entries) {
+                names.add(entry.split("\t")[1]);
+            }
+            Collections.sort(names);
+            for (String name : names) {
+                System.out.println(name);
+            }
+        } else {
+            for (String entry : entries) {
                 System.out.println(entry);
             }
         }
@@ -170,6 +177,7 @@ public class Main {
             }
         }
 
+        // Sort entries by the full string, which effectively sorts by name
         Collections.sort(entries);
         return entries;
     }
