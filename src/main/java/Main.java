@@ -48,7 +48,7 @@ public class Main {
                     }
                     firstLine = false;
                 }
-                content.append(line).append("\n");
+                content.append(line);
             }
 
             System.out.print(content);
@@ -196,6 +196,7 @@ public class Main {
     public static void writeTreeHandler() throws IOException {
         String treeHash = writeTree(Paths.get("."));
         System.out.print(treeHash);
+
     }
 
     // Recursive method to write tree objects
