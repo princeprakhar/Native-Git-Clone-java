@@ -1,264 +1,16 @@
-//import java.io.*;
-//import java.nio.charset.StandardCharsets;
-//import java.nio.file.*;
-//import java.util.*;
-//import java.util.zip.*;
-//import java.security.*;
-//
-//public class Main {
-//
-//    // SHA-1 hash calculation
-//    public static String sha1Hex(byte[] input) {
-//        try {
-//            MessageDigest md = MessageDigest.getInstance("SHA-1");
-//            byte[] sha1Bytes = md.digest(input);
-//
-//            StringBuilder hexString = new StringBuilder();
-//            for (byte b : sha1Bytes) {
-//                hexString.append(String.format("%02x", b));
-//            }
-//            return hexString.toString();
-//        } catch (NoSuchAlgorithmException e) {
-//            throw new RuntimeException("SHA-1 algorithm not found", e);
-//        }
-//    }
-//
-//    // Read compressed object and return its content
-//    private static byte[] readCompressedFile(String path) throws IOException {
-//        try (InflaterInputStream inflaterStream = new InflaterInputStream(new FileInputStream(path))) {
-//            return inflaterStream.readAllBytes();
-//        }
-//    }
-//
-//    // cat-file command handler
-//    public static void catFileHandler(String hash) throws IOException {
-//        String objectPath = shaToPath(hash);
-//        byte[] content = readCompressedFile(objectPath);
-//
-//        int nullIndex = indexOfNullByte(content);
-//        if (nullIndex != -1) {
-//            content = Arrays.copyOfRange(content, nullIndex + 1, content.length);
-//        }
-//
-//        System.out.print(new String(content, StandardCharsets.UTF_8));
-//    }
-//
-//    // Convert SHA-1 hash to file path
-//    private static String shaToPath(String sha) {
-//        return String.format(".git/objects/%s/%s", sha.substring(0, 2), sha.substring(2));
-//    }
-//
-//    // Create blob object and optionally write it to disk
-//    public static String createBlobObject(String fileName, boolean write) throws IOException {
-//        byte[] fileContents = Files.readAllBytes(Paths.get(fileName));
-//        String header = "blob " + fileContents.length + "\0";
-//        byte[] fullContent = concatenate(header.getBytes(StandardCharsets.UTF_8), fileContents);
-//
-//        String sha1Hash = sha1Hex(fullContent);
-//
-//        if (write) {
-//            writeCompressedFile(shaToPath(sha1Hash), fullContent);
-//        }
-//        return sha1Hash;
-//    }
-//
-//    // Initialize repository
-//    public static void initRepository() throws IOException {
-//        Path gitDir = Paths.get(".git");
-//        Files.createDirectories(gitDir.resolve("objects"));
-//        Files.createDirectories(gitDir.resolve("refs"));
-//        Files.write(gitDir.resolve("HEAD"), "ref: refs/heads/main\n".getBytes(StandardCharsets.UTF_8));
-//        System.out.println("Initialized git directory");
-//    }
-//
-//    // ls-tree command handler
-//    public static void lsTreeHandler(String[] args) throws IOException {
-//        if (args.length < 3 || !args[1].equals("--name-only")) {
-//            throw new IllegalArgumentException("Usage: java Main ls-tree --name-only <tree-ish>");
-//        }
-//
-//        List<String> entries = readTreeObject(args[2]);
-//        entries.stream().map(e -> e.split("\t")[1]).sorted().forEach(System.out::println);
-//    }
-//
-//    // Read and parse a tree object
-//    private static List<String> readTreeObject(String hash) throws IOException {
-//        String objectPath = shaToPath(hash);
-//        byte[] content = readCompressedFile(objectPath);
-//        List<String> entries = new ArrayList<>();
-//
-//        try (DataInputStream dataIn = new DataInputStream(new ByteArrayInputStream(content))) {
-//            String header = readNullTerminatedString(dataIn);
-//            if (!header.startsWith("tree ")) throw new IOException("Invalid tree object header");
-//
-//            while (dataIn.available() > 0) {
-//                String mode = readUntilSpace(dataIn);
-//                String name = readNullTerminatedString(dataIn);
-//                byte[] sha = new byte[20];
-//                dataIn.readFully(sha);
-//                entries.add(String.format("%s %s %s\t%s", mode, mode.startsWith("100") ? "blob" : "tree", bytesToHex(sha), name));
-//            }
-//        }
-//        return entries;
-//    }
-//
-//    // Write tree command handler
-//    public static void writeTreeHandler() throws IOException {
-//        String treeHash = writeTree(Paths.get("."));
-//        System.out.print(treeHash);
-//    }
-//
-//    // Recursive method to write tree objects
-//    private static String writeTree(Path dir) throws IOException {
-//        ByteArrayOutputStream treeContent = new ByteArrayOutputStream();
-//        Files.list(dir).sorted().forEach(path -> {
-//            try {
-//                if (Files.isDirectory(path) && !dir.relativize(path).toString().equals(".git")) {
-//                    String subTreeHash = writeTree(path);
-//                    writeTreeEntry(treeContent, "40000", dir.relativize(path).toString(), subTreeHash);
-//                } else {
-//                    String blobHash = createBlobObject(path.toString(), true);
-//                    String mode = Files.isExecutable(path) ? "100755" : "100644";
-//                    writeTreeEntry(treeContent, mode, dir.relativize(path).toString(), blobHash);
-//                }
-//            } catch (IOException e) {
-//                throw new UncheckedIOException(e);
-//            }
-//        });
-//
-//        byte[] content = treeContent.toByteArray();
-//        String header = "tree " + content.length + "\0";
-//        byte[] fullContent = concatenate(header.getBytes(StandardCharsets.UTF_8), content);
-//        String treeHash = sha1Hex(fullContent);
-//        writeCompressedFile(shaToPath(treeHash), fullContent);
-//        return treeHash;
-//    }
-//
-//    // Helper to write compressed file
-//    private static void writeCompressedFile(String path, byte[] content) throws IOException {
-//        File file = new File(path);
-//        file.getParentFile().mkdirs();
-//        try (DeflaterOutputStream out = new DeflaterOutputStream(new FileOutputStream(file))) {
-//            out.write(content);
-//        }
-//    }
-//
-//    // Helper to write a tree entry
-//    private static void writeTreeEntry(ByteArrayOutputStream out, String mode, String name, String hash) throws IOException {
-//        out.write(String.format("%s %s\0", mode, name).getBytes(StandardCharsets.UTF_8));
-//        out.write(hexToBytes(hash));
-//    }
-//
-//    // Helper method to concatenate byte arrays
-//    private static byte[] concatenate(byte[] a, byte[] b) {
-//        byte[] result = new byte[a.length + b.length];
-//        System.arraycopy(a, 0, result, 0, a.length);
-//        System.arraycopy(b, 0, result, a.length, b.length);
-//        return result;
-//    }
-//
-//    // Helper to find the index of the null byte
-//    private static int indexOfNullByte(byte[] array) {
-//        for (int i = 0; i < array.length; i++) {
-//            if (array[i] == 0) return i;
-//        }
-//        return -1;
-//    }
-//
-//    // Helper to convert bytes to hex
-//    private static String bytesToHex(byte[] bytes) {
-//        StringBuilder sb = new StringBuilder();
-//        for (byte b : bytes) {
-//            sb.append(String.format("%02x", b));
-//        }
-//        return sb.toString();
-//    }
-//
-//    // Helper to read until space
-//    private static String readUntilSpace(DataInputStream in) throws IOException {
-//        StringBuilder sb = new StringBuilder();
-//        int ch;
-//        while ((ch = in.read()) != ' ') {
-//            sb.append((char) ch);
-//        }
-//        return sb.toString();
-//    }
-//
-//    // Helper to read a null-terminated string
-//    private static String readNullTerminatedString(DataInputStream in) throws IOException {
-//        StringBuilder sb = new StringBuilder();
-//        int ch;
-//        while ((ch = in.read()) != 0) {
-//            sb.append((char) ch);
-//        }
-//        return sb.toString();
-//    }
-//
-//    // Convert hex string to byte array
-//    private static byte[] hexToBytes(String hex) {
-//        int len = hex.length();
-//        byte[] data = new byte[len / 2];
-//        for (int i = 0; i < len; i += 2) {
-//            data[i / 2] = (byte) ((Character.digit(hex.charAt(i), 16) << 4)
-//                    + Character.digit(hex.charAt(i + 1), 16));
-//        }
-//        return data;
-//    }
-//
-//    public static void main(String[] args) {
-//        if (args.length == 0) {
-//            System.out.println("Please provide a command");
-//            return;
-//        }
-//
-//        String command = args[0];
-//        try {
-//            switch (command) {
-//                case "init":
-//                    initRepository();
-//                    break;
-//                case "cat-file":
-//                    if (args.length < 3 || !args[1].equals("-p")) {
-//                        throw new IllegalArgumentException("Usage: java Main cat-file -p <object>");
-//                    }
-//                    catFileHandler(args[2]);
-//                    break;
-//                case "hash-object":
-//                    boolean write = args.length > 2 && args[1].equals("-w");
-//                    String fileName = write ? args[2] : args[1];
-//                    System.out.println(createBlobObject(fileName, write));
-//                    break;
-//                case "ls-tree":
-//                    lsTreeHandler(args);
-//                    break;
-//                case "write-tree":
-//                    writeTreeHandler();
-//                    break;
-//                default:
-//                    System.out.println("Unknown command: " + command);
-//            }
-//        } catch (Exception e) {
-//            System.err.println("Error: " + e.getMessage());
-//            e.printStackTrace();
-//        }
-//    }
-//}
-
-
-
-
 import java.io.*;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.*;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.zip.InflaterInputStream;
+import java.util.zip.DeflaterOutputStream;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.*;
-import java.util.zip.*;
-import java.security.*;
 import java.time.Instant;
-import java.time.ZoneOffset;
-import java.time.format.DateTimeFormatter;
 
 public class Main {
-
     // SHA-1 hash calculation
     public static String sha1Hex(byte[] input) {
         try {
@@ -267,32 +19,43 @@ public class Main {
 
             StringBuilder hexString = new StringBuilder();
             for (byte b : sha1Bytes) {
-                hexString.append(String.format("%02x", b));
+                String hex = Integer.toHexString(0xff & b);
+                if (hex.length() == 1) hexString.append('0');
+                hexString.append(hex);
             }
+
             return hexString.toString();
         } catch (NoSuchAlgorithmException e) {
             throw new RuntimeException("SHA-1 algorithm not found", e);
         }
     }
 
-    // Read compressed object and return its content
-    private static byte[] readCompressedFile(String path) throws IOException {
-        try (InflaterInputStream inflaterStream = new InflaterInputStream(new FileInputStream(path))) {
-            return inflaterStream.readAllBytes();
-        }
-    }
-
     // cat-file command handler
     public static void catFileHandler(String hash) throws IOException {
         String objectPath = shaToPath(hash);
-        byte[] content = readCompressedFile(objectPath);
 
-        int nullIndex = indexOfNullByte(content);
-        if (nullIndex != -1) {
-            content = Arrays.copyOfRange(content, nullIndex + 1, content.length);
+        try (InflaterInputStream inflaterStream = new InflaterInputStream(new FileInputStream(objectPath));
+             BufferedReader reader = new BufferedReader(new InputStreamReader(inflaterStream))) {
+
+            StringBuilder content = new StringBuilder();
+            String line;
+            boolean firstLine = true;
+            while ((line = reader.readLine()) != null) {
+                if (firstLine) {
+                    // Skip the header in the first line
+                    int nullIndex = line.indexOf('\0');
+                    if (nullIndex != -1) {
+                        line = line.substring(nullIndex + 1);
+                    }
+                    firstLine = false;
+                }
+                content.append(line).append("\n");
+            }
+
+            System.out.print(content);
+        } catch (IOException e) {
+            throw new IOException("Error reading object file: " + hash, e);
         }
-
-        System.out.print(new String(content, StandardCharsets.UTF_8));
     }
 
     // Convert SHA-1 hash to file path
@@ -300,61 +63,137 @@ public class Main {
         return String.format(".git/objects/%s/%s", sha.substring(0, 2), sha.substring(2));
     }
 
-    // Create blob object and optionally write it to disk
+    // hash-object command handler
     public static String createBlobObject(String fileName, boolean write) throws IOException {
-        byte[] fileContents = Files.readAllBytes(Paths.get(fileName));
-        String header = "blob " + fileContents.length + "\0";
-        byte[] fullContent = concatenate(header.getBytes(StandardCharsets.UTF_8), fileContents);
+        try {
+            byte[] fileContents = Files.readAllBytes(Paths.get(fileName));
+            String header = "blob " + fileContents.length + "\0";
+            byte[] headerBytes = header.getBytes(StandardCharsets.UTF_8);
 
-        String sha1Hash = sha1Hex(fullContent);
+            byte[] fullContent = new byte[headerBytes.length + fileContents.length];
+            System.arraycopy(headerBytes, 0, fullContent, 0, headerBytes.length);
+            System.arraycopy(fileContents, 0, fullContent, headerBytes.length, fileContents.length);
 
-        if (write) {
-            writeCompressedFile(shaToPath(sha1Hash), fullContent);
+            String sha1Hash = sha1Hex(fullContent);
+
+            if (write) {
+                String blobPath = shaToPath(sha1Hash);
+                File blobFile = new File(blobPath);
+                blobFile.getParentFile().mkdirs();
+                try (DeflaterOutputStream out = new DeflaterOutputStream(new FileOutputStream(blobFile))) {
+                    out.write(fullContent);
+                }
+            }
+
+            return sha1Hash;
+        } catch (IOException e) {
+            throw new IOException("Error processing file: " + fileName, e);
         }
-        return sha1Hash;
     }
 
-    // Initialize repository
+    // init command handler
     public static void initRepository() throws IOException {
-        Path gitDir = Paths.get(".git");
-        Files.createDirectories(gitDir.resolve("objects"));
-        Files.createDirectories(gitDir.resolve("refs"));
-        Files.write(gitDir.resolve("HEAD"), "ref: refs/heads/main\n".getBytes(StandardCharsets.UTF_8));
-        System.out.println("Initialized git directory");
+        File root = new File(".git");
+        new File(root, "objects").mkdirs();
+        new File(root, "refs").mkdirs();
+        File head = new File(root, "HEAD");
+
+        try {
+            head.createNewFile();
+            Files.write(head.toPath(), "ref: refs/heads/main\n".getBytes(StandardCharsets.UTF_8));
+            System.out.println("Initialized git directory");
+        } catch (IOException e) {
+            throw new IOException("Error initializing git repository", e);
+        }
     }
 
     // ls-tree command handler
     public static void lsTreeHandler(String[] args) throws IOException {
-        if (args.length < 3 || !args[1].equals("--name-only")) {
+        if (args.length < 3) {
             throw new IllegalArgumentException("Usage: java Main ls-tree --name-only <tree-ish>");
         }
 
-        List<String> entries = readTreeObject(args[2]);
-        entries.stream().map(e -> e.split("\t")[1]).sorted().forEach(System.out::println);
+        boolean nameOnly = args[1].equals("--name-only");
+        String treeIsh = args[2];
+
+        List<String> entries = readTreeObject(treeIsh);
+
+        if (nameOnly) {
+            List<String> names = new ArrayList<>();
+            for (String entry : entries) {
+                names.add(entry.split("\t")[1]);
+            }
+            Collections.sort(names);
+            for (String name : names) {
+                System.out.println(name);
+            }
+        } else {
+            for (String entry : entries) {
+                System.out.println(entry);
+            }
+        }
     }
 
-    // Read and parse a tree object
+    // Helper method to read and parse a tree object
     private static List<String> readTreeObject(String hash) throws IOException {
         String objectPath = shaToPath(hash);
-        byte[] content = readCompressedFile(objectPath);
         List<String> entries = new ArrayList<>();
 
-        try (DataInputStream dataIn = new DataInputStream(new ByteArrayInputStream(content))) {
-            String header = readNullTerminatedString(dataIn);
-            if (!header.startsWith("tree ")) throw new IOException("Invalid tree object header");
+        try (InflaterInputStream inflaterStream = new InflaterInputStream(new FileInputStream(objectPath));
+             DataInputStream dataIn = new DataInputStream(inflaterStream)) {
 
+            // Read and verify the header
+            String header = readNullTerminatedString(dataIn);
+            if (!header.startsWith("tree ")) {
+                throw new IOException("Invalid tree object header");
+            }
+
+            // Read entries
             while (dataIn.available() > 0) {
                 String mode = readUntilSpace(dataIn);
                 String name = readNullTerminatedString(dataIn);
                 byte[] sha = new byte[20];
                 dataIn.readFully(sha);
-                entries.add(String.format("%s %s %s\t%s", mode, mode.startsWith("100") ? "blob" : "tree", bytesToHex(sha), name));
+                String shaHex = bytesToHex(sha);
+
+                entries.add(String.format("%s %s %s\t%s", mode,
+                        mode.startsWith("100") ? "blob" : "tree", shaHex, name));
             }
         }
+
+        Collections.sort(entries);
         return entries;
     }
 
-    // Write tree command handler
+    // Helper method to read a null-terminated string
+    private static String readNullTerminatedString(DataInputStream in) throws IOException {
+        StringBuilder sb = new StringBuilder();
+        int ch;
+        while ((ch = in.read()) != 0) {
+            sb.append((char) ch);
+        }
+        return sb.toString();
+    }
+
+    // Helper method to read until a space character
+    private static String readUntilSpace(DataInputStream in) throws IOException {
+        StringBuilder sb = new StringBuilder();
+        int ch;
+        while ((ch = in.read()) != ' ') {
+            sb.append((char) ch);
+        }
+        return sb.toString();
+    }
+
+    // Helper method to convert bytes to hexadecimal string
+    private static String bytesToHex(byte[] bytes) {
+        StringBuilder sb = new StringBuilder();
+        for (byte b : bytes) {
+            sb.append(String.format("%02x", b));
+        }
+        return sb.toString();
+    }
+
     public static void writeTreeHandler() throws IOException {
         String treeHash = writeTree(Paths.get("."));
         System.out.print(treeHash);
@@ -365,13 +204,16 @@ public class Main {
         ByteArrayOutputStream treeContent = new ByteArrayOutputStream();
         Files.list(dir).sorted().forEach(path -> {
             try {
-                if (Files.isDirectory(path) && !dir.relativize(path).toString().equals(".git")) {
-                    String subTreeHash = writeTree(path);
-                    writeTreeEntry(treeContent, "40000", dir.relativize(path).toString(), subTreeHash);
+                String relativePath = dir.relativize(path).toString();
+                if (Files.isDirectory(path)) {
+                    if (!relativePath.equals(".git")) {
+                        String subTreeHash = writeTree(path);
+                        writeTreeEntry(treeContent, "40000", relativePath, subTreeHash);
+                    }
                 } else {
                     String blobHash = createBlobObject(path.toString(), true);
                     String mode = Files.isExecutable(path) ? "100755" : "100644";
-                    writeTreeEntry(treeContent, mode, dir.relativize(path).toString(), blobHash);
+                    writeTreeEntry(treeContent, mode, relativePath, blobHash);
                 }
             } catch (IOException e) {
                 throw new UncheckedIOException(e);
@@ -380,145 +222,121 @@ public class Main {
 
         byte[] content = treeContent.toByteArray();
         String header = "tree " + content.length + "\0";
-        byte[] fullContent = concatenate(header.getBytes(StandardCharsets.UTF_8), content);
+        byte[] headerBytes = header.getBytes(StandardCharsets.UTF_8);
+
+        byte[] fullContent = new byte[headerBytes.length + content.length];
+        System.arraycopy(headerBytes, 0, fullContent, 0, headerBytes.length);
+        System.arraycopy(content, 0, fullContent, headerBytes.length, content.length);
+
         String treeHash = sha1Hex(fullContent);
-        writeCompressedFile(shaToPath(treeHash), fullContent);
+        String treePath = shaToPath(treeHash);
+        File treeFile = new File(treePath);
+        treeFile.getParentFile().mkdirs();
+        try (DeflaterOutputStream out = new DeflaterOutputStream(new FileOutputStream(treeFile))) {
+            out.write(fullContent);
+        }
+
         return treeHash;
     }
 
-    // Commit tree handler (commit-tree)
-    public static void commitTreeHandler(String treeSha, String parentSha, String message) throws IOException {
-        // Hardcoded author/committer details
-        String author = "John Doe <john.doe@example.com>";
-
-        // Get current timestamp in the correct format
-        String timestamp = Instant.now().getEpochSecond() + " +0000";
-
-        // Build the commit object content
-        StringBuilder commitContent = new StringBuilder();
-        commitContent.append("tree ").append(treeSha).append("\n");
-        if (parentSha != null && !parentSha.isEmpty()) {
-            commitContent.append("parent ").append(parentSha).append("\n");
-        }
-        commitContent.append("author ").append(author).append(" ").append(timestamp).append("\n");
-        commitContent.append("committer ").append(author).append(" ").append(timestamp).append("\n\n");
-        commitContent.append(message).append("\n");
-
-        // Prepend the header
-        String commitString = commitContent.toString();
-        String header = "commit " + commitString.length() + "\0";
-        byte[] commitBytes = concatenate(header.getBytes(StandardCharsets.UTF_8), commitString.getBytes(StandardCharsets.UTF_8));
-
-        // Calculate the SHA1 for the commit object
-        String commitSha = sha1Hex(commitBytes);
-
-        // Write the commit object to .git/objects
-        writeCompressedFile(shaToPath(commitSha), commitBytes);
-
-        // Output the commit SHA
-        System.out.println(commitSha);
-    }
-
-    // Helper to write compressed file
-    private static void writeCompressedFile(String path, byte[] content) throws IOException {
-        File file = new File(path);
-        file.getParentFile().mkdirs();
-        try (DeflaterOutputStream out = new DeflaterOutputStream(new FileOutputStream(file))) {
-            out.write(content);
-        }
-    }
-
-    // Helper to write a tree entry
+    // Helper method to write a tree entry
     private static void writeTreeEntry(ByteArrayOutputStream out, String mode, String name, String hash) throws IOException {
         out.write(String.format("%s %s\0", mode, name).getBytes(StandardCharsets.UTF_8));
         out.write(hexToBytes(hash));
     }
 
-    // Helper method to concatenate byte arrays
-    private static byte[] concatenate(byte[] a, byte[] b) {
-        byte[] result = new byte[a.length + b.length];
-        System.arraycopy(a, 0, result, 0, a.length);
-        System.arraycopy(b, 0, result, a.length, b.length);
-        return result;
-    }
-
-    // Helper to find the index of the null byte
-    private static int indexOfNullByte(byte[] array) {
-        for (int i = 0; i < array.length; i++) {
-            if (array[i] == 0) return i;
-        }
-        return -1;
-    }
-
-    // Helper to convert bytes to hex
-    private static String bytesToHex(byte[] bytes) {
-        StringBuilder hexString = new StringBuilder();
-        for (byte b : bytes) {
-            hexString.append(String.format("%02x", b));
-        }
-        return hexString.toString();
-    }
-
-    // Helper to convert hex string to bytes
+    // Helper method to convert hexadecimal string to bytes
     private static byte[] hexToBytes(String hex) {
-        int len = hex.length();
-        byte[] data = new byte[len / 2];
-        for (int i = 0; i < len; i += 2) {
-            data[i / 2] = (byte) ((Character.digit(hex.charAt(i), 16) << 4) + Character.digit(hex.charAt(i + 1), 16));
+        byte[] bytes = new byte[hex.length() / 2];
+        for (int i = 0; i < bytes.length; i++) {
+            bytes[i] = (byte) Integer.parseInt(hex.substring(2 * i, 2 * i + 2), 16);
         }
-        return data;
+        return bytes;
     }
 
-    // Helper to read until space
-    private static String readUntilSpace(DataInputStream in) throws IOException {
-        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
-        byte b;
-        while ((b = in.readByte()) != ' ') {
-            buffer.write(b);
+    // commit-tree command handler
+    public static String commitTreeHandler(String treeHash, String parentHash, String message) throws IOException {
+        String timestamp = Instant.now().toString();
+        String author = "John Doe <john@example.com>";
+        String committer = "John Doe <john@example.com>";
+
+        StringBuilder commitContent = new StringBuilder();
+        commitContent.append("tree ").append(treeHash).append("\n");
+        if (parentHash != null && !parentHash.isEmpty()) {
+            commitContent.append("parent ").append(parentHash).append("\n");
         }
-        return buffer.toString(StandardCharsets.UTF_8);
+        commitContent.append("author ").append(author).append(" ").append(timestamp).append("\n");
+        commitContent.append("committer ").append(committer).append(" ").append(timestamp).append("\n");
+        commitContent.append("\n").append(message).append("\n");
+
+        byte[] content = commitContent.toString().getBytes(StandardCharsets.UTF_8);
+        String header = "commit " + content.length + "\0";
+        byte[] headerBytes = header.getBytes(StandardCharsets.UTF_8);
+
+        byte[] fullContent = new byte[headerBytes.length + content.length];
+        System.arraycopy(headerBytes, 0, fullContent, 0, headerBytes.length);
+        System.arraycopy(content, 0, fullContent, headerBytes.length, content.length);
+
+        String commitHash = sha1Hex(fullContent);
+        String commitPath = shaToPath(commitHash);
+        File commitFile = new File(commitPath);
+        commitFile.getParentFile().mkdirs();
+        try (DeflaterOutputStream out = new DeflaterOutputStream(new FileOutputStream(commitFile))) {
+            out.write(fullContent);
+        }
+
+        return commitHash;
     }
 
-    // Helper to read null-terminated string
-    private static String readNullTerminatedString(DataInputStream in) throws IOException {
-        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
-        byte b;
-        while ((b = in.readByte()) != 0) {
-            buffer.write(b);
-        }
-        return buffer.toString(StandardCharsets.UTF_8);
-    }
-
-    // Main method
-    public static void main(String[] args) throws IOException {
+    public static void main(String[] args) {
         if (args.length == 0) {
-            System.err.println("Usage: <command> [<args>]");
+            System.out.println("Please provide a command");
             return;
         }
 
         String command = args[0];
-        switch (command) {
-            case "init":
-                initRepository();
-                break;
-            case "cat-file":
-                catFileHandler(args[1]);
-                break;
-            case "ls-tree":
-                lsTreeHandler(args);
-                break;
-            case "write-tree":
-                writeTreeHandler();
-                break;
-            case "commit-tree":
-                String treeSha = args[1];
-                String parentSha = args[3]; // -p argument
-                String message = args[5]; // -m argument
-                commitTreeHandler(treeSha, parentSha, message);
-                break;
-            default:
-                System.err.println("Unknown command: " + command);
+
+        try {
+            switch (command) {
+                case "init":
+                    initRepository();
+                    break;
+                case "cat-file":
+                    if (args.length < 3 || !args[1].equals("-p")) {
+                        throw new IllegalArgumentException("Usage: java Main cat-file -p <object>");
+                    }
+                    catFileHandler(args[2]);
+                    break;
+                case "hash-object":
+                    if (args.length < 2) {
+                        throw new IllegalArgumentException("Usage: java Main hash-object [-w] <file>");
+                    }
+                    boolean write = args[1].equals("-w");
+                    String fileName = write ? args[2] : args[1];
+                    System.out.println(createBlobObject(fileName, write));
+                    break;
+                case "ls-tree":
+                    lsTreeHandler(args);
+                    break;
+                case "write-tree":
+                    writeTreeHandler();
+                    break;
+                case "commit-tree":
+                    if (args.length < 6) {
+                        throw new IllegalArgumentException("Usage: java Main commit-tree <tree> -p <parent> -m <message>");
+                    }
+                    String treeHash = args[1];
+                    String parentHash = args[3];
+                    String message = args[5];
+                    String commitHash = commitTreeHandler(treeHash, parentHash, message);
+                    System.out.println(commitHash);
+                    break;
+                default:
+                    System.out.println("Unknown command: " + command);
+            }
+        } catch (Exception e) {
+            System.err.println("Error: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 }
-
