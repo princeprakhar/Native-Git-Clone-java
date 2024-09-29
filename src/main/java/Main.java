@@ -79,6 +79,7 @@ public class Main {
         printTreeEntries(entries, nameOnly);
     }
 
+
     private static void writeTree() throws IOException {
         String treeHash = writeTreeRecursive(Paths.get("."));
         System.out.print(treeHash);
@@ -172,7 +173,7 @@ public class Main {
     private static void printTreeEntries(List<String> entries, boolean nameOnly) {
         if (nameOnly) {
             entries.stream()
-                    .map(entry -> entry.split("\t")[1])
+                    .map(entry -> entry.split("\\s+")[2]) // Extract the filename
                     .sorted()
                     .forEach(System.out::println);
         } else {
