@@ -49,7 +49,7 @@ public class Main {
                     }
                     firstLine = false;
                 }
-                content.append(line).append("\n");
+                content.append(line);
             }
 
             System.out.print(content);
