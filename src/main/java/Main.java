@@ -344,13 +344,12 @@ public class Main {
             throw new RuntimeException("Cloning process was interrupted.", e);
         }
     }
-
+// main method
     public static void main(String[] args) {
         if (args.length == 0) {
             System.out.println("Please provide a command");
             return;
         }
-
         String command = args[0];
 
         try {
