@@ -195,7 +195,7 @@ public class Main {
 
     public static void writeTreeHandler() throws IOException {
         String treeHash = writeTree(Paths.get("."));
-        System.out.println(treeHash);
+        System.out.print(treeHash);
     }
 
     // Recursive method to write tree objects
