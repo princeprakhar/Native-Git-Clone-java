@@ -1,14 +1,13 @@
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.zip.InflaterInputStream;
 import java.util.zip.DeflaterOutputStream;
-import java.nio.file.Paths;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
+import java.util.*;
 
 public class Main {
     // SHA-1 hash calculation
@@ -32,11 +31,9 @@ public class Main {
 
     // cat-file command handler
     public static void catFileHandler(String hash) throws IOException {
-        String hashOfDir = hash.substring(0, 2);
-        String hashOfFilename = hash.substring(2);
-        File fileDestination = new File(".git/objects/" + hashOfDir + "/" + hashOfFilename);
+        String objectPath = shaToPath(hash);
 
-        try (InflaterInputStream inflaterStream = new InflaterInputStream(new FileInputStream(fileDestination));
+        try (InflaterInputStream inflaterStream = new InflaterInputStream(new FileInputStream(objectPath));
              BufferedReader reader = new BufferedReader(new InputStreamReader(inflaterStream))) {
 
             StringBuilder content = new StringBuilder();
@@ -51,7 +48,7 @@ public class Main {
                     }
                     firstLine = false;
                 }
-                content.append(line);
+                content.append(line).append("\n");
             }
 
             System.out.print(content);
@@ -66,22 +63,7 @@ public class Main {
     }
 
     // hash-object command handler
-    public static void createBlobObject(String[] args) throws IOException {
-        boolean write = false;
-        String fileName = null;
-
-        for (String arg : args) {
-            if (arg.equals("-w")) {
-                write = true;
-            } else if (!arg.equals("hash-object")) {
-                fileName = arg;
-            }
-        }
-
-        if (fileName == null) {
-            throw new IllegalArgumentException("No file name provided");
-        }
-
+    public static String createBlobObject(String fileName, boolean write) throws IOException {
         try {
             byte[] fileContents = Files.readAllBytes(Paths.get(fileName));
             String header = "blob " + fileContents.length + "\0";
@@ -92,7 +74,6 @@ public class Main {
             System.arraycopy(fileContents, 0, fullContent, headerBytes.length, fileContents.length);
 
             String sha1Hash = sha1Hex(fullContent);
-            System.out.println(sha1Hash);
 
             if (write) {
                 String blobPath = shaToPath(sha1Hash);
@@ -102,6 +83,8 @@ public class Main {
                     out.write(fullContent);
                 }
             }
+
+            return sha1Hash;
         } catch (IOException e) {
             throw new IOException("Error processing file: " + fileName, e);
         }
@@ -177,7 +160,6 @@ public class Main {
             }
         }
 
-        // Sort entries by the full string, which effectively sorts by name
         Collections.sort(entries);
         return entries;
     }
@@ -211,6 +193,66 @@ public class Main {
         return sb.toString();
     }
 
+    // write-tree command handler
+    public static void writeTreeHandler() throws IOException {
+        String treeHash = writeTree(Paths.get("."));
+        System.out.println(treeHash);
+    }
+
+    // Recursive method to write tree objects
+    private static String writeTree(Path dir) throws IOException {
+        List<String> entries = new ArrayList<>();
+        Files.list(dir).sorted().forEach(path -> {
+            try {
+                String relativePath = dir.relativize(path).toString();
+                if (Files.isDirectory(path)) {
+                    if (!relativePath.equals(".git")) {
+                        String subTreeHash = writeTree(path);
+                        entries.add(String.format("40000 %s\0%s", relativePath, hexToBytes(subTreeHash)));
+                    }
+                } else {
+                    String blobHash = createBlobObject(path.toString(), true);
+                    String mode = Files.isExecutable(path) ? "100755" : "100644";
+                    entries.add(String.format("%s %s\0%s", mode, relativePath, hexToBytes(blobHash)));
+                }
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
+        });
+
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        for (String entry : entries) {
+            baos.write(entry.getBytes(StandardCharsets.UTF_8));
+        }
+
+        byte[] treeContent = baos.toByteArray();
+        String header = "tree " + treeContent.length + "\0";
+        byte[] headerBytes = header.getBytes(StandardCharsets.UTF_8);
+
+        byte[] fullContent = new byte[headerBytes.length + treeContent.length];
+        System.arraycopy(headerBytes, 0, fullContent, 0, headerBytes.length);
+        System.arraycopy(treeContent, 0, fullContent, headerBytes.length, treeContent.length);
+
+        String treeHash = sha1Hex(fullContent);
+        String treePath = shaToPath(treeHash);
+        File treeFile = new File(treePath);
+        treeFile.getParentFile().mkdirs();
+        try (DeflaterOutputStream out = new DeflaterOutputStream(new FileOutputStream(treeFile))) {
+            out.write(fullContent);
+        }
+
+        return treeHash;
+    }
+
+    // Helper method to convert hexadecimal string to bytes
+    private static byte[] hexToBytes(String hex) {
+        byte[] bytes = new byte[hex.length() / 2];
+        for (int i = 0; i < bytes.length; i++) {
+            bytes[i] = (byte) Integer.parseInt(hex.substring(2 * i, 2 * i + 2), 16);
+        }
+        return bytes;
+    }
+
     public static void main(String[] args) {
         if (args.length == 0) {
             System.out.println("Please provide a command");
@@ -234,10 +276,15 @@ public class Main {
                     if (args.length < 2) {
                         throw new IllegalArgumentException("Usage: java Main hash-object [-w] <file>");
                     }
-                    createBlobObject(args);
+                    boolean write = args[1].equals("-w");
+                    String fileName = write ? args[2] : args[1];
+                    System.out.println(createBlobObject(fileName, write));
                     break;
                 case "ls-tree":
                     lsTreeHandler(args);
+                    break;
+                case "write-tree":
+                    writeTreeHandler();
                     break;
                 default:
                     System.out.println("Unknown command: " + command);
