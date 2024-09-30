@@ -12,7 +12,6 @@ public class Main {
     private static final String GIT_DIR = ".git";
     private static final String OBJECTS_DIR = GIT_DIR + "/objects";
     private static final String REFS_DIR = GIT_DIR + "/refs";
-
     public static void main(String[] args) {
         if (args.length == 0) {
             System.out.println("Please provide a command");
